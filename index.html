@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>Visualisation 3D STL</title>
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            height: 100%;
+            background: #111827;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: #e5e7eb;
+        }
+        #container {
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            inset: 0;
+        }
+        #overlay {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            padding: 6px 10px;
+            background: rgba(15, 23, 42, 0.8);
+            border-radius: 8px;
+            font-size: 13px;
+        }
+        #overlay strong {
+            color: #38bdf8;
+        }
+        #buttons {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        . btn {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 999px;
+            border: 1px solid #374151;
+            background: #111827;
+            cursor: pointer;
+            color: #e5e7eb;
+        }
+        .btn:hover {
+            background: #1f2937;
+        }
+        #pieceSelect {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid #374151;
+            background: #111827;
+            color: #e5e7eb;
+            cursor: pointer;
+            min-width: 150px;
+        }
+        #pieceSelect:hover {
+            background: #1f2937;
+        }
+        #pieceSelect option {
+            background: #1f2937;
+            color: #e5e7eb;
+        }
+        #loadingIndicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 23, 42, 0.9);
+            padding: 20px;
+            border-radius: 8px;
+            font-size: 16px;
+            color: #38bdf8;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<div id="container"></div>
+
+<div id="overlay">
+    <div><strong>Rotation :</strong> clic gauche + drag</div>
+    <div><strong>Zoom :</strong> molette</div>
+    <div><strong>Déplacement :</strong> clic droit + drag</div>
+</div>
+
+<div id="buttons">
+    <select id="pieceSelect">
+        <option value="">Choisir une pièce... </option>
+    </select>
+    <button class="btn" id="toggleProj">Projection : perspective</button>
+    <button class="btn" id="resetCamera">Reset caméra</button>
+</div>
+
+<div id="loadingIndicator">Chargement de la pièce...</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/STLLoader.js"></script>
+
+<script>
+    // 📦 Tableau des pièces disponibles
+    const PIECES = [
+        {
+            nom: "Engrenage Principal",
+            url: "https://example.com/engrenage.stl"
+        },
+        {
+            nom: "Support Moteur",
+            url: "https://example.com/support.stl"
+        },
+        {
+            nom: "Boîtier Électronique", 
+            url: "https://example.com/boitier. stl"
+        },
+        {
+            nom: "Roue Dentée",
+            url: "https://example.com/roue.stl"
+        },
+        {
+            nom: "Carter de Protection",
+            url: "https://example.com/carter.stl"
+        }
+        // Ajoutez vos pièces ici ! 
+    ];
+
+    // 🔽 Variables Three.js
+    var scene, renderer, controls, mesh;
+    var perspCamera, orthoCamera, currentCamera;
+    var initialCamPos = new THREE.Vector3();
+    var initialTarget = new THREE.Vector3();
+    var isOrtho = false;
+    var currentSTL_URL = null;
+
+    var container = document.getElementById('container');
+    var pieceSelect = document.getElementById('pieceSelect');
+    var loadingIndicator = document.getElementById('loadingIndicator');
+
+    // 🔽 Initialisation de la scène
+    function initScene() {
+        scene = new THREE.Scene();
+        scene. background = new THREE.Color(0x111827);
+
+        // Caméras
+        var aspect = window.innerWidth / window. innerHeight;
+        perspCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
+        perspCamera.position.set(80, 60, 80);
+
+        var frustumSize = 200;
+        var orthoHeight = frustumSize;
+        var orthoWidth = frustumSize * aspect;
+        orthoCamera = new THREE. OrthographicCamera(
+            -orthoWidth / 2, orthoWidth / 2,
+            orthoHeight / 2, -orthoHeight / 2,
+            0. 1, 1000
+        );
+        orthoCamera.position. copy(perspCamera.position);
+        orthoCamera.lookAt(0, 0, 0);
+
+        currentCamera = perspCamera;
+        initialCamPos.copy(currentCamera.position);
+
+        // Renderer
+        renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        container.appendChild(renderer.domElement);
+
+        // Lumières
+        var hemiLight = new THREE.HemisphereLight(0xffffff, 0x111827, 0.6);
+        scene.add(hemiLight);
+
+        var dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(50, 100, 50);
+        scene.add(dirLight);
+
+        var backLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        backLight.position. set(-50, -40, -50);
+        scene. add(backLight);
+
+        // Grille
+        var grid = new THREE.GridHelper(200, 20, 0x374151, 0x1f2937);
+        scene.add(grid);
+
+        // Contrôles
+        controls = new THREE.OrbitControls(currentCamera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.08;
+        initialTarget.copy(controls.target);
+    }
+
+    // 🔽 Remplir la dropdown avec les pièces
+    function populateDropdown() {
+        // Vider d'abord
+        pieceSelect.innerHTML = '<option value="">Choisir une pièce...</option>';
+        
+        // Ajouter chaque pièce
+        PIECES.forEach((piece, index) => {
+            const option = document.createElement('option');
+            option.value = piece.url;
+            option.textContent = piece.nom;
+            pieceSelect.appendChild(option);
+        });
+    }
+
+    // 🔽 Charger une pièce STL
+    function loadSTL(url) {
+        if (! url || url === currentSTL_URL) return;
+        
+        currentSTL_URL = url;
+        loadingIndicator.style. display = 'block';
+
+        // Supprimer l'ancien mesh s'il existe
+        if (mesh) {
+            scene.remove(mesh);
+            if (mesh.geometry) mesh.geometry.dispose();
+            if (mesh.material) mesh.material.dispose();
+        }
+
+        var loader = new THREE.STLLoader();
+        loader.load(
+            url,
+            function (geometry) {
+                geometry.computeBoundingBox();
+                geometry. computeVertexNormals();
+
+                var material = new THREE. MeshPhongMaterial({
+                    color: 0x60a5fa,
+                    specular: 0x111827,
+                    shininess: 80
+                });
+
+                mesh = new THREE.Mesh(geometry, material);
+                mesh.castShadow = true;
+                mesh. receiveShadow = true;
+                scene.add(mesh);
+
+                // Centrer et redimensionner
+                var bbox = geometry.boundingBox;
+                var center = new THREE.Vector3();
+                bbox.getCenter(center);
+                mesh.position.sub(center);
+
+                var size = new THREE.Vector3();
+                bbox.getSize(size);
+                var maxDim = Math.max(size.x, size.y, size.z);
+                var scaleFactor = 80 / maxDim;
+                mesh.scale.setScalar(scaleFactor);
+
+                // Reset caméra
+                controls.target.set(0, 0, 0);
+                controls.update();
+
+                loadingIndicator.style.display = 'none';
+            },
+            undefined,
+            function (error) {
+                console.error('Erreur lors du chargement du STL :', error);
+                alert('Impossible de charger le fichier STL : ' + url);
+                loadingIndicator.style.display = 'none';
+            }
+        );
+    }
+
+    // 🔽 Boucle d'animation
+    function animate() {
+        requestAnimationFrame(animate);
+        controls. update();
+        renderer.render(scene, currentCamera);
+    }
+
+    // 🔽 Initialisation
+    initScene();
+    populateDropdown();
+
+    // Vérifier s'il y a un paramètre STL dans l'URL
+    const params = new URLSearchParams(window. location.search);
+    const stlParam = params.get('stl');
+    if (stlParam) {
+        const decodedURL = decodeURIComponent(stlParam);
+        loadSTL(decodedURL);
+        // Essayer de sélectionner la pièce correspondante dans la dropdown
+        const matchingPiece = PIECES.find(piece => piece.url === decodedURL);
+        if (matchingPiece) {
+            pieceSelect.value = decodedURL;
+        }
+    }
+
+    animate();
+
+    // 🔽 Event Listeners
+    
+    // Changement de pièce
+    pieceSelect.addEventListener('change', function() {
+        const selectedURL = this.value;
+        if (selectedURL) {
+            loadSTL(selectedURL);
+            // Mettre à jour l'URL
+            const newURL = new URL(window.location);
+            newURL.searchParams. set('stl', encodeURIComponent(selectedURL));
+            window.history.replaceState({}, '', newURL);
+        }
+    });
+
+    // Redimensionnement fenêtre
+    window.addEventListener('resize', function () {
+        var width = window.innerWidth;
+        var height = window.innerHeight;
+        var aspect = width / height;
+
+        perspCamera.aspect = aspect;
+        perspCamera.updateProjectionMatrix();
+
+        var frustumSize = 200;
+        orthoCamera. left   = -frustumSize * aspect / 2;
+        orthoCamera.right  =  frustumSize * aspect / 2;
+        orthoCamera.top    =  frustumSize / 2;
+        orthoCamera.bottom = -frustumSize / 2;
+        orthoCamera.updateProjectionMatrix();
+
+        renderer. setSize(width, height);
+    });
+
+    // Toggle projection
+    document.getElementById('toggleProj').addEventListener('click', function () {
+        var btn = this;
+
+        if (!isOrtho) {
+            isOrtho = true;
+            orthoCamera.position.copy(currentCamera.position);
+            orthoCamera.up.copy(currentCamera. up);
+            orthoCamera. lookAt(controls.target);
+            currentCamera = orthoCamera;
+            controls.object = currentCamera;
+            controls.update();
+            btn.textContent = 'Projection : parallèle';
+        } else {
+            isOrtho = false;
+            perspCamera.position. copy(currentCamera.position);
+            perspCamera.up.copy(currentCamera.up);
+            perspCamera.lookAt(controls.target);
+            currentCamera = perspCamera;
+            controls.object = currentCamera;
+            controls.update();
+            btn.textContent = 'Projection : perspective';
+        }
+    });
+
+    // Reset caméra
+    document.getElementById('resetCamera').addEventListener('click', function () {
+        currentCamera. position.copy(initialCamPos);
+        controls.target.copy(initialTarget);
+        controls. update();
+    });
+</script>
+</body>
+</html>

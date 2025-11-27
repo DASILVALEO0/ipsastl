@@ -39,7 +39,7 @@
             gap: 6px;
             align-items: center;
         }
-        . btn {
+        .btn {
             font-size: 12px;
             padding: 4px 8px;
             border-radius: 999px;
@@ -93,7 +93,7 @@
 
 <div id="buttons">
     <select id="pieceSelect">
-        <option value="">Choisir une pièce... </option>
+        <option value="">Choisir une pièce...</option>
     </select>
     <button class="btn" id="toggleProj">Projection : perspective</button>
     <button class="btn" id="resetCamera">Reset caméra</button>
@@ -118,7 +118,7 @@
         },
         {
             nom: "Boîtier Électronique", 
-            url: "https://example.com/boitier. stl"
+            url: "https://example.com/boitier.stl"
         },
         {
             nom: "Roue Dentée",
@@ -146,22 +146,22 @@
     // 🔽 Initialisation de la scène
     function initScene() {
         scene = new THREE.Scene();
-        scene. background = new THREE.Color(0x111827);
+        scene.background = new THREE.Color(0x111827);
 
         // Caméras
-        var aspect = window.innerWidth / window. innerHeight;
+        var aspect = window.innerWidth / window.innerHeight;
         perspCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
         perspCamera.position.set(80, 60, 80);
 
         var frustumSize = 200;
         var orthoHeight = frustumSize;
         var orthoWidth = frustumSize * aspect;
-        orthoCamera = new THREE. OrthographicCamera(
+        orthoCamera = new THREE.OrthographicCamera(
             -orthoWidth / 2, orthoWidth / 2,
             orthoHeight / 2, -orthoHeight / 2,
-            0. 1, 1000
+            0.1, 1000
         );
-        orthoCamera.position. copy(perspCamera.position);
+        orthoCamera.position.copy(perspCamera.position);
         orthoCamera.lookAt(0, 0, 0);
 
         currentCamera = perspCamera;
@@ -182,8 +182,8 @@
         scene.add(dirLight);
 
         var backLight = new THREE.DirectionalLight(0xffffff, 0.4);
-        backLight.position. set(-50, -40, -50);
-        scene. add(backLight);
+        backLight.position.set(-50, -40, -50);
+        scene.add(backLight);
 
         // Grille
         var grid = new THREE.GridHelper(200, 20, 0x374151, 0x1f2937);
@@ -215,7 +215,7 @@
         if (! url || url === currentSTL_URL) return;
         
         currentSTL_URL = url;
-        loadingIndicator.style. display = 'block';
+        loadingIndicator.style.display = 'block';
 
         // Supprimer l'ancien mesh s'il existe
         if (mesh) {
@@ -229,9 +229,9 @@
             url,
             function (geometry) {
                 geometry.computeBoundingBox();
-                geometry. computeVertexNormals();
+                geometry.computeVertexNormals();
 
-                var material = new THREE. MeshPhongMaterial({
+                var material = new THREE.MeshPhongMaterial({
                     color: 0x60a5fa,
                     specular: 0x111827,
                     shininess: 80
@@ -239,7 +239,7 @@
 
                 mesh = new THREE.Mesh(geometry, material);
                 mesh.castShadow = true;
-                mesh. receiveShadow = true;
+                mesh.receiveShadow = true;
                 scene.add(mesh);
 
                 // Centrer et redimensionner
@@ -272,7 +272,7 @@
     // 🔽 Boucle d'animation
     function animate() {
         requestAnimationFrame(animate);
-        controls. update();
+        controls.update();
         renderer.render(scene, currentCamera);
     }
 
@@ -281,7 +281,7 @@
     populateDropdown();
 
     // Vérifier s'il y a un paramètre STL dans l'URL
-    const params = new URLSearchParams(window. location.search);
+    const params = new URLSearchParams(window.location.search);
     const stlParam = params.get('stl');
     if (stlParam) {
         const decodedURL = decodeURIComponent(stlParam);
@@ -304,7 +304,7 @@
             loadSTL(selectedURL);
             // Mettre à jour l'URL
             const newURL = new URL(window.location);
-            newURL.searchParams. set('stl', encodeURIComponent(selectedURL));
+            newURL.searchParams.set('stl', encodeURIComponent(selectedURL));
             window.history.replaceState({}, '', newURL);
         }
     });
@@ -319,13 +319,13 @@
         perspCamera.updateProjectionMatrix();
 
         var frustumSize = 200;
-        orthoCamera. left   = -frustumSize * aspect / 2;
+        orthoCamera.left   = -frustumSize * aspect / 2;
         orthoCamera.right  =  frustumSize * aspect / 2;
         orthoCamera.top    =  frustumSize / 2;
         orthoCamera.bottom = -frustumSize / 2;
         orthoCamera.updateProjectionMatrix();
 
-        renderer. setSize(width, height);
+        renderer.setSize(width, height);
     });
 
     // Toggle projection
@@ -335,15 +335,15 @@
         if (!isOrtho) {
             isOrtho = true;
             orthoCamera.position.copy(currentCamera.position);
-            orthoCamera.up.copy(currentCamera. up);
-            orthoCamera. lookAt(controls.target);
+            orthoCamera.up.copy(currentCamera.up);
+            orthoCamera.lookAt(controls.target);
             currentCamera = orthoCamera;
             controls.object = currentCamera;
             controls.update();
             btn.textContent = 'Projection : parallèle';
         } else {
             isOrtho = false;
-            perspCamera.position. copy(currentCamera.position);
+            perspCamera.position.copy(currentCamera.position);
             perspCamera.up.copy(currentCamera.up);
             perspCamera.lookAt(controls.target);
             currentCamera = perspCamera;
@@ -355,9 +355,9 @@
 
     // Reset caméra
     document.getElementById('resetCamera').addEventListener('click', function () {
-        currentCamera. position.copy(initialCamPos);
+        currentCamera.position.copy(initialCamPos);
         controls.target.copy(initialTarget);
-        controls. update();
+        controls.update();
     });
 </script>
 </body>

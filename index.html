@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <title>Visualisation 3D STL</title>
+    <title>3D STL IPSA</title>
     <style>
         html, body {
             margin: 0;
@@ -80,6 +80,90 @@
             color: #38bdf8;
             display: none;
         }
+        
+        #lightPanel {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(15, 23, 42, 0.9);
+            border-radius: 8px;
+            padding: 12px;
+            border: 1px solid #374151;
+        }
+        #lightPanel h3 {
+            margin: 0 0 8px 0;
+            font-size: 13px;
+            color: #38bdf8;
+            text-align: center;
+        }
+        .light-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 30px);
+            gap: 4px;
+            margin-bottom: 8px;
+        }
+        .light-btn {
+            width: 30px;
+            height: 30px;
+            border: 1px solid #374151;
+            background: #111827;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #e5e7eb;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .light-btn:hover {
+            background: #1f2937;
+            border-color: #38bdf8;
+        }
+        .light-btn:active {
+            background: #38bdf8;
+        }
+        .light-intensity {
+            margin-top: 8px;
+        }
+        .light-intensity label {
+            font-size: 11px;
+            display: block;
+            margin-bottom: 4px;
+            color: #9ca3af;
+        }
+        .light-intensity input {
+            width: 100%;
+            height: 4px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: #374151;
+            outline: none;
+            border-radius: 2px;
+        }
+        .light-intensity input::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            background: #38bdf8;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+        .light-intensity input::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            background: #38bdf8;
+            cursor: pointer;
+            border-radius: 50%;
+            border: none;
+        }
+        .light-reset {
+            width: 100%;
+            margin-top: 8px;
+            font-size: 11px;
+            padding: 4px;
+        }
     </style>
 </head>
 <body>
@@ -99,6 +183,26 @@
     <button class="btn" id="resetCamera">Reset caméra</button>
 </div>
 
+<div id="lightPanel">
+    <h3>💡 Lumière</h3>
+    <div class="light-controls">
+        <div></div>
+        <button class="light-btn" id="lightUp" title="Haut">↑</button>
+        <div></div>
+        <button class="light-btn" id="lightLeft" title="Gauche">←</button>
+        <button class="light-btn" id="lightCenter" title="Centre">⊙</button>
+        <button class="light-btn" id="lightRight" title="Droite">→</button>
+        <div></div>
+        <button class="light-btn" id="lightDown" title="Bas">↓</button>
+        <div></div>
+    </div>
+    <div class="light-intensity">
+        <label>Intensité : <span id="intensityValue">0.8</span></label>
+        <input type="range" id="lightIntensity" min="0" max="2" step="0.1" value="0.8">
+    </div>
+    <button class="btn light-reset" id="resetLight">Réinitialiser</button>
+</div>
+
 <div id="loadingIndicator">Chargement de la pièce...</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -106,7 +210,6 @@
 <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/STLLoader.js"></script>
 
 <script>
-    // 📦 Tableau des pièces disponibles
     const PIECES = [
         {
             nom: "DC TT MOTOR",
@@ -134,7 +237,6 @@
         },
     ];
 
-    // 🔽 Variables Three.js
     var scene, renderer, controls, mesh;
     var perspCamera, orthoCamera, currentCamera;
     var initialCamPos = new THREE.Vector3();
@@ -142,16 +244,21 @@
     var isOrtho = false;
     var currentSTL_URL = null;
 
+    var dirLight, backLight;
+    var lightPosition = new THREE.Vector3(50, 100, 50);
+    var initialLightPos = new THREE.Vector3(50, 100, 50);
+    var lightStep = 20;
+
     var container = document.getElementById('container');
     var pieceSelect = document.getElementById('pieceSelect');
     var loadingIndicator = document.getElementById('loadingIndicator');
+    var intensitySlider = document.getElementById('lightIntensity');
+    var intensityValue = document.getElementById('intensityValue');
 
-    // 🔽 Initialisation de la scène
     function initScene() {
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x111827);
 
-        // Caméras
         var aspect = window.innerWidth / window.innerHeight;
         perspCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
         perspCamera.position.set(80, 60, 80);
@@ -170,41 +277,34 @@
         currentCamera = perspCamera;
         initialCamPos.copy(currentCamera.position);
 
-        // Renderer
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
         container.appendChild(renderer.domElement);
 
-        // Lumières
         var hemiLight = new THREE.HemisphereLight(0xffffff, 0x111827, 0.6);
         scene.add(hemiLight);
 
-        var dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(50, 100, 50);
+        dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.copy(lightPosition);
         scene.add(dirLight);
 
-        var backLight = new THREE.DirectionalLight(0xffffff, 0.4);
+        backLight = new THREE.DirectionalLight(0xffffff, 0.4);
         backLight.position.set(-50, -40, -50);
         scene.add(backLight);
 
-        // Grille
         var grid = new THREE.GridHelper(200, 20, 0x374151, 0x1f2937);
         scene.add(grid);
 
-        // Contrôles
         controls = new THREE.OrbitControls(currentCamera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.08;
         initialTarget.copy(controls.target);
     }
 
-    // 🔽 Remplir la dropdown avec les pièces
     function populateDropdown() {
-        // Vider d'abord
         pieceSelect.innerHTML = '<option value="">Choisir une pièce...</option>';
         
-        // Ajouter chaque pièce
         PIECES.forEach((piece, index) => {
             const option = document.createElement('option');
             option.value = piece.url;
@@ -213,14 +313,12 @@
         });
     }
 
-    // 🔽 Charger une pièce STL
     function loadSTL(url) {
         if (! url || url === currentSTL_URL) return;
         
         currentSTL_URL = url;
         loadingIndicator.style.display = 'block';
 
-        // Supprimer l'ancien mesh s'il existe
         if (mesh) {
             scene.remove(mesh);
             if (mesh.geometry) mesh.geometry.dispose();
@@ -245,7 +343,6 @@
                 mesh.receiveShadow = true;
                 scene.add(mesh);
 
-                // Centrer et redimensionner
                 var bbox = geometry.boundingBox;
                 var center = new THREE.Vector3();
                 bbox.getCenter(center);
@@ -257,7 +354,6 @@
                 var scaleFactor = 80 / maxDim;
                 mesh.scale.setScalar(scaleFactor);
 
-                // Reset caméra
                 controls.target.set(0, 0, 0);
                 controls.update();
 
@@ -272,24 +368,24 @@
         );
     }
 
-    // 🔽 Boucle d'animation
+    function updateLightPosition() {
+        dirLight.position.copy(lightPosition);
+    }
+
     function animate() {
         requestAnimationFrame(animate);
         controls.update();
         renderer.render(scene, currentCamera);
     }
 
-    // 🔽 Initialisation
     initScene();
     populateDropdown();
 
-    // Vérifier s'il y a un paramètre STL dans l'URL
     const params = new URLSearchParams(window.location.search);
     const stlParam = params.get('stl');
     if (stlParam) {
         const decodedURL = decodeURIComponent(stlParam);
         loadSTL(decodedURL);
-        // Essayer de sélectionner la pièce correspondante dans la dropdown
         const matchingPiece = PIECES.find(piece => piece.url === decodedURL);
         if (matchingPiece) {
             pieceSelect.value = decodedURL;
@@ -298,21 +394,56 @@
 
     animate();
 
-    // 🔽 Event Listeners
     
-    // Changement de pièce
     pieceSelect.addEventListener('change', function() {
         const selectedURL = this.value;
         if (selectedURL) {
             loadSTL(selectedURL);
-            // Mettre à jour l'URL
             const newURL = new URL(window.location);
             newURL.searchParams.set('stl', encodeURIComponent(selectedURL));
             window.history.replaceState({}, '', newURL);
         }
     });
 
-    // Redimensionnement fenêtre
+    document.getElementById('lightUp').addEventListener('click', function() {
+        lightPosition.y += lightStep;
+        updateLightPosition();
+    });
+
+    document.getElementById('lightDown').addEventListener('click', function() {
+        lightPosition.y -= lightStep;
+        updateLightPosition();
+    });
+
+    document.getElementById('lightLeft').addEventListener('click', function() {
+        lightPosition.x -= lightStep;
+        updateLightPosition();
+    });
+
+    document.getElementById('lightRight').addEventListener('click', function() {
+        lightPosition.x += lightStep;
+        updateLightPosition();
+    });
+
+    document.getElementById('lightCenter').addEventListener('click', function() {
+        lightPosition.z += lightStep;
+        updateLightPosition();
+    });
+
+    document.getElementById('resetLight').addEventListener('click', function() {
+        lightPosition.copy(initialLightPos);
+        updateLightPosition();
+        intensitySlider.value = 0.8;
+        intensityValue.textContent = '0.8';
+        dirLight.intensity = 0.8;
+    });
+
+    intensitySlider.addEventListener('input', function() {
+        const value = parseFloat(this.value);
+        intensityValue.textContent = value.toFixed(1);
+        dirLight.intensity = value;
+    });
+
     window.addEventListener('resize', function () {
         var width = window.innerWidth;
         var height = window.innerHeight;
@@ -331,7 +462,6 @@
         renderer.setSize(width, height);
     });
 
-    // Toggle projection
     document.getElementById('toggleProj').addEventListener('click', function () {
         var btn = this;
 
@@ -356,7 +486,6 @@
         }
     });
 
-    // Reset caméra
     document.getElementById('resetCamera').addEventListener('click', function () {
         currentCamera.position.copy(initialCamPos);
         controls.target.copy(initialTarget);
